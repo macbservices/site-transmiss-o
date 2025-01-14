@@ -26,7 +26,6 @@
 
             const storedPassword = localStorage.getItem(`user_${username}`);
             if (storedPassword && storedPassword === password) {
-                localStorage.setItem("isLoggedIn", "true");
                 alert("Login successful!");
                 window.location.href = "/player.html";
             } else {
