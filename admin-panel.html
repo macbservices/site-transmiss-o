@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+        input, button { padding: 10px; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>Admin Panel</h1>
+    <div>
+        <h2>Manage Users</h2>
+        <input type="text" id="new-username" placeholder="Username">
+        <input type="password" id="new-password" placeholder="Password">
+        <button onclick="addUser()">Add User</button>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="user-table">
+                <!-- Users will be populated here -->
+            </tbody>
+        </table>
+    </div>
+    <div>
+        <h2>Set Video URL</h2>
+        <input type="text" id="video-url" placeholder="Video URL">
+        <button onclick="setVideoURL()">Update Video</button>
+    </div>
+
+    <script>
+        function addUser() {
+            const username = document.getElementById("new-username").value;
+            const password = document.getElementById("new-password").value;
+            if (username && password) {
+                localStorage.setItem(`user_${username}`, password);
+                populateUserTable();
+                alert("User added!");
+            }
+        }
+
+        function deleteUser(username) {
+            localStorage.removeItem(`user_${username}`);
+            populateUserTable();
+        }
+
+        function populateUserTable() {
+            const userTable = document.getElementById("user-table");
+            userTable.innerHTML = "";
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith("user_")) {
+                    const username = key.replace("user_", "");
+                    userTable.innerHTML += `
+                        <tr>
+                            <td>${username}</td>
+                            <td><button onclick="deleteUser('${username}')">Delete</button></td>
+                        </tr>
+                    `;
+                }
+            }
+        }
+
+        function setVideoURL() {
+            const videoURL = document.getElementById("video-url").value;
+            localStorage.setItem("videoURL", videoURL);
+            alert("Video URL updated!");
+        }
+
+        // Populate table on load
+        populateUserTable();
+    </script>
+</body>
+</html>
