@@ -23,11 +23,17 @@ sudo mkdir -p $SITE_DIR
 sudo curl -o $SITE_DIR/admin-panel.html $REPO_URL/admin-panel.html
 sudo curl -o $SITE_DIR/client-login.html $REPO_URL/client-login.html
 sudo curl -o $SITE_DIR/player.html $REPO_URL/player.html
+sudo curl -o $SITE_DIR/config.php $REPO_URL/config.php
+sudo curl -o $SITE_DIR/styles.css $REPO_URL/styles.css
 
 # Configurar permissões
 echo "Configurando permissões..."
 sudo chown -R www-data:www-data $SITE_DIR
 sudo chmod -R 755 $SITE_DIR
+
+# Adicionar configuração para garantir acesso ao diretório
+sudo sed -i '/<Directory \/var\/www\/html>/,/<\/Directory>/c\\
+<Directory /var/www/html>\\n    AllowOverride All\\n    Require all granted\\n<\/Directory>' /etc/apache2/sites-available/000-default.conf
 
 # Configurar SSL e domínio
 read -p "Você deseja configurar um domínio com SSL? (y/n): " ssl_option
