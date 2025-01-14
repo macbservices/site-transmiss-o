@@ -5,21 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Player</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 0; margin: 0; background: #000; }
-        iframe { display: block; border: none; width: 100%; height: 100vh; }
+        body {
+            font-family: Arial, sans-serif;
+            padding: 0;
+            margin: 0;
+            background: #000;
+        }
+        iframe {
+            display: block;
+            border: none;
+            width: 100%;
+            height: 100vh; /* Ocupa toda a altura da janela */
+        }
     </style>
 </head>
 <body>
+    <iframe id="video-iframe" src="" allow="encrypted-media"></iframe>
+
     <script>
-        const isLoggedIn = localStorage.getItem("isLoggedIn");
-        if (isLoggedIn !== "true") {
-            alert("You are not authorized to access this page. Redirecting to login...");
-            window.location.href = "/client-login.html";
+        // Recupera o URL salvo no localStorage
+        const videoURL = localStorage.getItem("videoURL");
+
+        // Define o iframe para carregar o vÃ­deo
+        if (videoURL) {
+            document.getElementById("video-iframe").src = videoURL;
         } else {
-            const videoURL = localStorage.getItem("videoURL");
-            document.write(`
-                <iframe src="${videoURL}" allow="encrypted-media"></iframe>
-            `);
+            document.body.innerHTML = "<h1 style='color: white; text-align: center; padding: 20px;'>No video URL set. Please contact the administrator.</h1>";
         }
     </script>
 </body>
