@@ -1,42 +1,42 @@
 #!/bin/bash
 
-echo "==> Atualizando pacotes..."
+# Configuração do diretório do site
+SITE_DIR="/var/www/html"
+REPO_URL="https://raw.githubusercontent.com/macbservices/site-transmissao/main"
+
+# Atualizar o sistema
+echo "Atualizando pacotes..."
 sudo apt update && sudo apt upgrade -y
 
-echo "==> Instalando dependências..."
-sudo apt install -y apache2 certbot python3-certbot-apache git unzip
+# Instalar dependências necessárias
+echo "Instalando Apache, Certbot e outras dependências..."
+sudo apt install apache2 curl certbot python3-certbot-apache unzip -y
 
-echo "==> Configurando Apache..."
-sudo mkdir -p /var/www/html
-sudo cp -r * /var/www/html/
+# Baixar arquivos do site
+echo "Baixando arquivos do site..."
+sudo mkdir -p $SITE_DIR
+sudo curl -o $SITE_DIR/admin-panel.html $REPO_URL/admin-panel.html
+sudo curl -o $SITE_DIR/client-login.html $REPO_URL/client-login.html
+sudo curl -o $SITE_DIR/player.html $REPO_URL/player.html
 
-sudo bash -c 'cat <<EOF > /etc/apache2/sites-available/000-default.conf
-<VirtualHost *:80>
-    DocumentRoot /var/www/html
-    <Directory /var/www/html>
-        AllowOverride All
-        Require all granted
-    </Directory>
-    RewriteEngine On
-    RewriteCond %{REQUEST_URI} ^/$
-    RewriteRule ^ /client-login.html [L]
-    <FilesMatch "player.html">
-        Require all denied
-    </FilesMatch>
-</VirtualHost>
-EOF'
+# Configurar permissões
+echo "Configurando permissões do diretório do site..."
+sudo chown -R www-data:www-data $SITE_DIR
+sudo chmod -R 755 $SITE_DIR
 
-echo "==> Ativando módulos do Apache..."
-sudo a2enmod rewrite
-sudo systemctl restart apache2
-
-read -p "Você quer usar um domínio? (s/n): " use_domain
-
-if [[ "$use_domain" == "s" ]]; then
-    read -p "Digite o domínio: " domain
-    sudo bash -c "echo '127.0.0.1 $domain' >> /etc/hosts"
-    sudo certbot --apache -d "$domain"
+# Perguntar sobre configuração de domínio e SSL
+read -p "Você deseja configurar um domínio com SSL? (y/n): " ssl_option
+if [[ "$ssl_option" == "y" ]]; then
+    read -p "Digite o domínio (ex: exemplo.com): " domain
+    sudo certbot --apache -d $domain
+    echo "SSL configurado para o domínio $domain"
+else
+    echo "SSL não configurado. Você pode configurar manualmente depois."
 fi
 
-echo "==> Instalação concluída!"
+# Reiniciar Apache
+echo "Reiniciando o Apache..."
+sudo systemctl restart apache2
 
+# Finalização
+echo "Instalação concluída! Acesse o site pelo IP ou domínio configurado."
