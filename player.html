@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 0; margin: 0; background: #000; }
+        iframe { display: block; border: none; width: 100%; height: 100vh; }
+    </style>
+</head>
+<body>
+    <script>
+        const isLoggedIn = localStorage.getItem("isLoggedIn");
+        if (isLoggedIn !== "true") {
+            alert("You are not authorized to access this page. Redirecting to login...");
+            window.location.href = "/client-login.html";
+        } else {
+            const videoURL = localStorage.getItem("videoURL");
+            document.write(`
+                <iframe src="${videoURL}" allow="encrypted-media"></iframe>
+            `);
+        }
+    </script>
+</body>
+</html>
