@@ -10,7 +10,23 @@ echo "Atualizando pacotes..."
 apt update -y && apt upgrade -y
 
 echo "Instalando dependências..."
-apt install -y apache2 git curl unzip
+apt install -y apache2 git curl unzip mysql-server php libapache2-mod-php php-mysqli
+
+# Inicia o MySQL
+systemctl enable mysql
+systemctl start mysql
+
+echo "Configuração do MySQL..."
+# Criação do banco de dados e da tabela de usuários
+mysql -e "CREATE DATABASE tvonline;"
+mysql -e "USE tvonline; CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL
+);"
+
+# Criar um usuário admin padrão no banco
+mysql -e "USE tvonline; INSERT INTO users (username, password) VALUES ('admin', '$(echo -n 'admin123' | openssl dgst -sha256)');"
 
 echo "Habilitando o Apache para iniciar automaticamente..."
 systemctl enable apache2
@@ -86,3 +102,5 @@ EOL
 
   echo "Configuração de domínio concluída! O site está disponível em: https://$DOMINIO"
 fi
+
+echo "Instalação do MySQL e do site concluída!"
