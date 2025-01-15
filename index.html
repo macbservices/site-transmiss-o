@@ -9,37 +9,18 @@
 <body>
     <div class="container mt-5">
         <h1 class="text-center">Login</h1>
-        <form id="login-form" class="mt-4">
+        <form id="login-form" class="mt-4" method="POST" action="login.php">
             <div class="form-group mb-3">
                 <label for="username">Usuário</label>
-                <input type="text" id="username" class="form-control" placeholder="Digite seu usuário" required>
+                <input type="text" id="username" class="form-control" placeholder="Digite seu usuário" name="username" required>
             </div>
             <div class="form-group mb-3">
                 <label for="password">Senha</label>
-                <input type="password" id="password" class="form-control" placeholder="Digite sua senha" required>
+                <input type="password" id="password" class="form-control" placeholder="Digite sua senha" name="password" required>
             </div>
             <button type="submit" class="btn btn-primary w-100">Entrar</button>
         </form>
         <div id="error-message" class="text-danger mt-3"></div>
     </div>
-
-    <script>
-        const users = JSON.parse(localStorage.getItem('users')) || {
-            "admin": { password: "12345", channel: "" }
-        };
-
-        document.getElementById('login-form').addEventListener('submit', (event) => {
-            event.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-
-            if (users[username] && users[username].password === password) {
-                localStorage.setItem('currentUser', username);
-                window.location.href = 'player.html';
-            } else {
-                document.getElementById('error-message').textContent = 'Usuário ou senha incorretos!';
-            }
-        });
-    </script>
 </body>
 </html>
