@@ -1,98 +1,88 @@
 #!/bin/bash
 
-# Configurações iniciais
-SITE_DIR="/var/www/html"
-REPO_URL="https://raw.githubusercontent.com/macbservices/site-transmissao/main"
+# Verifica se o script está sendo executado como root
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Este script precisa ser executado como root. Use sudo ./install.sh"
+  exit 1
+fi
 
-# Atualizar o sistema
 echo "Atualizando pacotes..."
-sudo apt update && sudo apt upgrade -y
+apt update -y && apt upgrade -y
 
-# Instalar dependências
-echo "Instalando Apache, Certbot e outras dependências..."
-sudo apt install apache2 curl certbot python3-certbot-apache unzip -y
+echo "Instalando dependências..."
+apt install -y apache2 git curl unzip
 
-# Configurar o Apache
-echo "Configurando o Apache..."
-sudo a2enmod ssl rewrite
-sudo systemctl restart apache2
+echo "Habilitando o Apache para iniciar automaticamente..."
+systemctl enable apache2
+systemctl start apache2
 
-# Baixar arquivos do site
-echo "Baixando arquivos do site..."
-sudo mkdir -p $SITE_DIR
-sudo curl -o $SITE_DIR/admin-panel.html $REPO_URL/admin-panel.html
-sudo curl -o $SITE_DIR/client-login.html $REPO_URL/client-login.html
-sudo curl -o $SITE_DIR/player.html $REPO_URL/player.html
-sudo curl -o $SITE_DIR/config.php $REPO_URL/config.php
-sudo curl -o $SITE_DIR/styles.css $REPO_URL/styles.css
+echo "Clonando repositório do site..."
+REPO_URL="https://github.com/macbservices/site-transmissao.git"
+WEB_DIR="/var/www/tvonline"
+if [ -d "$WEB_DIR" ]; then
+  rm -rf "$WEB_DIR"
+fi
+git clone "$REPO_URL" "$WEB_DIR"
 
-# Configurar permissões
 echo "Configurando permissões..."
-sudo chown -R www-data:www-data $SITE_DIR
-sudo chmod -R 755 $SITE_DIR
+chown -R www-data:www-data "$WEB_DIR"
+chmod -R 755 "$WEB_DIR"
 
-# Adicionar configuração para garantir acesso ao diretório
-sudo sed -i '/<Directory \/var\/www\/html>/,/<\/Directory>/c\\
-<Directory /var/www/html>\\n    AllowOverride All\\n    Require all granted\\n<\/Directory>' /etc/apache2/sites-available/000-default.conf
-
-# Configurar SSL e domínio
-read -p "Você deseja configurar um domínio com SSL? (y/n): " ssl_option
-if [[ "$ssl_option" == "y" ]]; then
-    read -p "Digite o domínio (ex: exemplo.com): " domain
-
-    # Configuração do VirtualHost
-    echo "Criando configuração para o domínio $domain..."
-    sudo cat > /etc/apache2/sites-available/$domain.conf <<EOL
+echo "Configurando o Apache..."
+APACHE_CONF="/etc/apache2/sites-available/tvonline.conf"
+cat <<EOL > $APACHE_CONF
 <VirtualHost *:80>
-    ServerName $domain
-    ServerAlias www.$domain
-    DocumentRoot $SITE_DIR
-
-    <Directory $SITE_DIR>
+    ServerAdmin admin@tvonline.local
+    DocumentRoot $WEB_DIR
+    <Directory $WEB_DIR>
+        Options Indexes FollowSymLinks
         AllowOverride All
         Require all granted
     </Directory>
-
-    ErrorLog \${APACHE_LOG_DIR}/error.log
-    CustomLog \${APACHE_LOG_DIR}/access.log combined
-
-    RewriteEngine On
-    RewriteCond %{HTTPS} off
-    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    ErrorLog \${APACHE_LOG_DIR}/tvonline_error.log
+    CustomLog \${APACHE_LOG_DIR}/tvonline_access.log combined
 </VirtualHost>
-
-<IfModule mod_ssl.c>
-    <VirtualHost *:443>
-        ServerName $domain
-        ServerAlias www.$domain
-        DocumentRoot $SITE_DIR
-
-        <Directory $SITE_DIR>
-            AllowOverride All
-            Require all granted
-        </Directory>
-
-        ErrorLog \${APACHE_LOG_DIR}/error.log
-        CustomLog \${APACHE_LOG_DIR}/access.log combined
-
-        SSLEngine on
-        SSLCertificateFile /etc/letsencrypt/live/$domain/fullchain.pem
-        SSLCertificateKeyFile /etc/letsencrypt/live/$domain/privkey.pem
-    </VirtualHost>
-</IfModule>
 EOL
 
-    # Habilitar site e obter certificado SSL
-    sudo a2ensite $domain
-    sudo systemctl reload apache2
-    sudo certbot --apache -d $domain -d www.$domain
-else
-    echo "SSL não configurado. Você pode configurar manualmente depois."
+a2ensite tvonline.conf
+a2dissite 000-default.conf
+systemctl reload apache2
+
+echo "Instalação do site concluída! O site está disponível em: http://$(curl -s ifconfig.me)"
+
+# Perguntar se deseja configurar um domínio
+read -p "Você deseja adicionar um domínio ao site? (sim/não): " ADD_DOMAIN
+if [[ "$ADD_DOMAIN" == "sim" ]]; then
+  read -p "Informe o domínio (ex.: seusite.com): " DOMINIO
+
+  echo "Configurando domínio: $DOMINIO..."
+
+  # Atualiza o VirtualHost do Apache
+  cat <<EOL > $APACHE_CONF
+<VirtualHost *:80>
+    ServerAdmin admin@$DOMINIO
+    ServerName $DOMINIO
+    ServerAlias www.$DOMINIO
+    DocumentRoot $WEB_DIR
+    <Directory $WEB_DIR>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog \${APACHE_LOG_DIR}/tvonline_error.log
+    CustomLog \${APACHE_LOG_DIR}/tvonline_access.log combined
+</VirtualHost>
+EOL
+
+  a2ensite tvonline.conf
+  systemctl reload apache2
+
+  echo "Instalando Certbot para configurar SSL..."
+  apt install -y certbot python3-certbot-apache
+  certbot --apache -d $DOMINIO -d www.$DOMINIO --non-interactive --agree-tos -m admin@$DOMINIO
+
+  echo "Configurando renovação automática de certificados..."
+  (crontab -l 2>/dev/null; echo "0 0 * * * certbot renew --quiet") | crontab -
+
+  echo "Configuração de domínio concluída! O site está disponível em: https://$DOMINIO"
 fi
-
-# Reiniciar Apache
-echo "Reiniciando o Apache..."
-sudo systemctl restart apache2
-
-# Finalização
-echo "Instalação concluída! Acesse o site pelo IP ou domínio configurado."
