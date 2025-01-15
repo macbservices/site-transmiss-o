@@ -53,14 +53,6 @@
     <script>
         const adminCredentials = { username: "admin", password: "admin123" };
 
-        // Verificar se o administrador já está logado
-        if (localStorage.getItem("adminLoggedIn") === "true") {
-            document.getElementById("admin-login").style.display = "none";
-            document.getElementById("admin-panel").style.display = "block";
-            loadUsers();
-            loadVideoURL();
-        }
-
         document.getElementById("admin-login").addEventListener("submit", function(e) {
             e.preventDefault();
             const username = document.getElementById("username").value;
@@ -68,7 +60,6 @@
 
             if (username === adminCredentials.username && password === adminCredentials.password) {
                 alert("Login Successful");
-                localStorage.setItem("adminLoggedIn", "true"); // Salvar login
                 document.getElementById("admin-login").style.display = "none";
                 document.getElementById("admin-panel").style.display = "block";
                 loadUsers();
@@ -90,42 +81,44 @@
             const clientUsername = document.getElementById("client-username").value;
             const clientPassword = document.getElementById("client-password").value;
 
-            const formData = new FormData();
-            formData.append('clientUsername', clientUsername);
-            formData.append('clientPassword', clientPassword);
-
-            fetch('create_user.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.text())
-            .then(data => {
-                alert(data); // Exibe a mensagem do servidor (sucesso ou erro)
-                loadUsers(); // Atualiza a lista de usuários
-            })
-            .catch(error => {
-                alert('Error: ' + error);
-            });
+            // Connect to PHP backend to insert the new user into MySQL
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "create_user.php", true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.onload = function() {
+                if (xhr.status === 200 && xhr.responseText === "User created successfully!") {
+                    alert("Client user created successfully!");
+                    loadUsers();
+                } else {
+                    alert("Error: " + xhr.responseText);
+                }
+            };
+            xhr.send("username=" + clientUsername + "&password=" + clientPassword);
         });
 
         function loadUsers() {
             const userList = document.getElementById("user-list");
             userList.innerHTML = "";
 
-            Object.keys(localStorage).forEach(key => {
-                if (key.startsWith("user_")) {
-                    const username = key.replace("user_", "");
-                    const row = document.createElement("tr");
-                    row.innerHTML = `
-                        <td>${username}</td>
-                        <td>
-                            <button class="action-btn" onclick="editUser('${username}')">Edit</button>
-                            <button class="action-btn" onclick="deleteUser('${username}')">Delete</button>
-                        </td>
-                    `;
-                    userList.appendChild(row);
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", "admin_actions.php?action=loadUsers", true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const users = JSON.parse(xhr.responseText);
+                    users.forEach(user => {
+                        const row = document.createElement("tr");
+                        row.innerHTML = `
+                            <td>${user.username}</td>
+                            <td>
+                                <button class="action-btn" onclick="editUser('${user.username}')">Edit</button>
+                                <button class="action-btn" onclick="deleteUser('${user.username}')">Delete</button>
+                            </td>
+                        `;
+                        userList.appendChild(row);
+                    });
                 }
-            });
+            };
+            xhr.send();
         }
 
         function loadVideoURL() {
@@ -138,16 +131,31 @@
         function editUser(username) {
             const newPassword = prompt(`Enter new password for ${username}:`);
             if (newPassword) {
-                localStorage.setItem(`user_${username}`, newPassword);
-                alert("Password updated successfully!");
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", "admin_actions.php", true);
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        alert("Password updated successfully!");
+                        loadUsers();
+                    }
+                };
+                xhr.send("action=editUser&username=" + username + "&password=" + newPassword);
             }
         }
 
         function deleteUser(username) {
             if (confirm(`Are you sure you want to delete the user ${username}?`)) {
-                localStorage.removeItem(`user_${username}`);
-                alert("User deleted successfully!");
-                loadUsers();
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", "admin_actions.php", true);
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        alert("User deleted successfully!");
+                        loadUsers();
+                    }
+                };
+                xhr.send("action=deleteUser&username=" + username);
             }
         }
     </script>
