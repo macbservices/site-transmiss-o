@@ -1,113 +1,89 @@
 #!/bin/bash
 
-# Verifica se o script está sendo executado como root
-if [ "$(id -u)" -ne 0 ]; then
-  echo "Este script precisa ser executado como root. Use sudo ./install.sh"
-  exit 1
-fi
+# Função para obter o nome de usuário e senha do MySQL
+get_mysql_credentials() {
+    echo "Digite o nome de usuário do MySQL:"
+    read mysql_user
+    echo "Digite a senha do MySQL:"
+    read -s mysql_password
 
-echo "Atualizando pacotes..."
-apt update -y && apt upgrade -y
+    # Testa a conexão ao MySQL com as credenciais fornecidas
+    mysql -u $mysql_user -p$mysql_password -e "exit" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo "Conexão com o MySQL bem-sucedida!"
+    else
+        echo "Erro ao conectar ao MySQL com o usuário e senha fornecidos. Tente novamente."
+        get_mysql_credentials
+    fi
+}
 
-echo "Instalando dependências..."
-apt install -y apache2 git curl unzip mysql-server php php-mysqli
+# Função para obter nome do banco de dados
+get_db_name() {
+    echo "Digite o nome do banco de dados que deseja criar (exemplo: tv_online):"
+    read db_name
+}
 
-echo "Habilitando o Apache para iniciar automaticamente..."
-systemctl enable apache2
-systemctl start apache2
+# Função para criar o arquivo db_config.php
+generate_db_config() {
+    echo "Gerando o arquivo db_config.php com as configurações fornecidas..."
 
-echo "Habilitando o MySQL para iniciar automaticamente..."
-systemctl enable mysql
-systemctl start mysql
+    cat <<EOL > db_config.php
+<?php
+\$servername = "localhost";
+\$username = "$mysql_user";  // Nome de usuário do MySQL fornecido
+\$password = "$mysql_password"; // Senha do MySQL fornecida
+\$dbname = "$db_name"; // Nome do banco de dados fornecido
 
-echo "Configuração do MySQL: Garantindo permissões para o usuário root..."
-# Acessa o MySQL e configura permissões
-mysql -u root <<EOF
-GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY 'b18073518B@123' WITH GRANT OPTION;
-FLUSH PRIVILEGES;
+\$conn = new mysqli(\$servername, \$username, \$password, \$dbname);
 
--- Criação do banco de dados e tabela de usuários
-CREATE DATABASE IF NOT EXISTS tvonline;
+if (\$conn->connect_error) {
+    die("Connection failed: " . \$conn->connect_error);
+}
+?>
+EOL
+}
 
-USE tvonline;
+# Atualizar repositórios
+echo "Atualizando repositórios do sistema..."
+sudo apt update -y
 
+# Instalar Apache, PHP e dependências do MySQL
+echo "Instalando Apache, PHP e dependências do MySQL..."
+sudo apt install apache2 php libapache2-mod-php php-mysqli -y
+
+# Instalar MySQL
+echo "Instalando o MySQL..."
+sudo apt install mysql-server -y
+
+# Iniciar e habilitar o MySQL
+echo "Iniciando o MySQL..."
+sudo systemctl start mysql
+sudo systemctl enable mysql
+
+# Solicitar credenciais do MySQL
+get_mysql_credentials
+
+# Solicitar nome do banco de dados
+get_db_name
+
+# Criar o banco de dados
+echo "Criando o banco de dados '$db_name'..."
+mysql -u $mysql_user -p$mysql_password -e "CREATE DATABASE IF NOT EXISTS $db_name;"
+
+# Criar a tabela de usuários
+echo "Criando a tabela de usuários..."
+mysql -u $mysql_user -p$mysql_password -D $db_name -e "
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(255) NOT NULL UNIQUE,
+    username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL
-);
+);"
 
--- Inserir um usuário de exemplo
-INSERT INTO users (username, password) VALUES ('admin', '12345') ON DUPLICATE KEY UPDATE password = '12345';
-EOF
+# Gerar o arquivo db_config.php com as credenciais fornecidas
+generate_db_config
 
-echo "Clonando repositório do site..."
-REPO_URL="https://github.com/macbservices/site-transmissao.git"
-WEB_DIR="/var/www/tvonline"
-if [ -d "$WEB_DIR" ]; then
-  rm -rf "$WEB_DIR"
-fi
-git clone "$REPO_URL" "$WEB_DIR"
+# Concluir a configuração
+echo "Configuração concluída com sucesso! O banco de dados '$db_name' foi criado e o arquivo db_config.php foi gerado com as configurações."
 
-echo "Configurando permissões..."
-chown -R www-data:www-data "$WEB_DIR"
-chmod -R 755 "$WEB_DIR"
-
-echo "Configurando o Apache..."
-APACHE_CONF="/etc/apache2/sites-available/tvonline.conf"
-cat <<EOL > $APACHE_CONF
-<VirtualHost *:80>
-    ServerAdmin admin@tvonline.local
-    DocumentRoot $WEB_DIR
-    <Directory $WEB_DIR>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-    ErrorLog \${APACHE_LOG_DIR}/tvonline_error.log
-    CustomLog \${APACHE_LOG_DIR}/tvonline_access.log combined
-</VirtualHost>
-EOL
-
-a2ensite tvonline.conf
-a2dissite 000-default.conf
-systemctl reload apache2
-
-echo "Instalação do site concluída! O site está disponível em: http://$(curl -s ifconfig.me)"
-
-# Perguntar se deseja configurar um domínio
-read -p "Você deseja adicionar um domínio ao site? (sim/não): " ADD_DOMAIN
-if [[ "$ADD_DOMAIN" == "sim" ]]; then
-  read -p "Informe o domínio (ex.: seusite.com): " DOMINIO
-
-  echo "Configurando domínio: $DOMINIO..."
-
-  # Atualiza o VirtualHost do Apache
-  cat <<EOL > $APACHE_CONF
-<VirtualHost *:80>
-    ServerAdmin admin@$DOMINIO
-    ServerName $DOMINIO
-    ServerAlias www.$DOMINIO
-    DocumentRoot $WEB_DIR
-    <Directory $WEB_DIR>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-    ErrorLog \${APACHE_LOG_DIR}/tvonline_error.log
-    CustomLog \${APACHE_LOG_DIR}/tvonline_access.log combined
-</VirtualHost>
-EOL
-
-  a2ensite tvonline.conf
-  systemctl reload apache2
-
-  echo "Instalando Certbot para configurar SSL..."
-  apt install -y certbot python3-certbot-apache
-  certbot --apache -d $DOMINIO -d www.$DOMINIO --non-interactive --agree-tos -m admin@$DOMINIO
-
-  echo "Configurando renovação automática de certificados..."
-  (crontab -l 2>/dev/null; echo "0 0 * * * certbot renew --quiet") | crontab -
-
-  echo "Configuração de domínio concluída! O site está disponível em: https://$DOMINIO"
-fi
+# Informar o usuário que a configuração foi bem-sucedida
+echo "Lembre-se de usar o nome de usuário '$mysql_user' e a senha fornecida para configurar sua conexão no site."
