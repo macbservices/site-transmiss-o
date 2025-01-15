@@ -51,7 +51,15 @@
     </div>
 
     <script>
-        const adminCredentials = { username: "admin", password: "12345" };
+        const adminCredentials = { username: "admin", password: "admin123" };
+
+        // Verificar se o administrador já está logado
+        if (localStorage.getItem("adminLoggedIn") === "true") {
+            document.getElementById("admin-login").style.display = "none";
+            document.getElementById("admin-panel").style.display = "block";
+            loadUsers();
+            loadVideoURL();
+        }
 
         document.getElementById("admin-login").addEventListener("submit", function(e) {
             e.preventDefault();
@@ -60,6 +68,7 @@
 
             if (username === adminCredentials.username && password === adminCredentials.password) {
                 alert("Login Successful");
+                localStorage.setItem("adminLoggedIn", "true"); // Salvar login
                 document.getElementById("admin-login").style.display = "none";
                 document.getElementById("admin-panel").style.display = "block";
                 loadUsers();
@@ -72,16 +81,8 @@
         document.getElementById("update-video").addEventListener("submit", function(e) {
             e.preventDefault();
             const videoUrl = document.getElementById("video-url").value;
-
-            // Faz uma requisição AJAX para salvar a URL no banco de dados
-            fetch('/update-video', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: videoUrl })
-            }).then(response => response.json())
-              .then(data => {
-                  alert("Video URL updated successfully!");
-              });
+            localStorage.setItem("videoURL", videoUrl);
+            alert("Video URL updated successfully!");
         });
 
         document.getElementById("create-user").addEventListener("submit", function(e) {
@@ -89,81 +90,64 @@
             const clientUsername = document.getElementById("client-username").value;
             const clientPassword = document.getElementById("client-password").value;
 
-            // Faz uma requisição AJAX para criar o usuário no banco de dados
-            fetch('/create-user', {
+            const formData = new FormData();
+            formData.append('clientUsername', clientUsername);
+            formData.append('clientPassword', clientPassword);
+
+            fetch('create_user.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: clientUsername, password: clientPassword })
-            }).then(response => response.json())
-              .then(data => {
-                  if (data.success) {
-                      alert("Client user created successfully!");
-                      loadUsers();
-                  } else {
-                      alert("Username already exists!");
-                  }
-              });
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => {
+                alert(data); // Exibe a mensagem do servidor (sucesso ou erro)
+                loadUsers(); // Atualiza a lista de usuários
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+            });
         });
 
         function loadUsers() {
             const userList = document.getElementById("user-list");
             userList.innerHTML = "";
 
-            fetch('/get-users')
-                .then(response => response.json())
-                .then(users => {
-                    users.forEach(user => {
-                        const row = document.createElement("tr");
-                        row.innerHTML = `
-                            <td>${user.username}</td>
-                            <td>
-                                <button class="action-btn" onclick="editUser('${user.username}')">Edit</button>
-                                <button class="action-btn" onclick="deleteUser('${user.username}')">Delete</button>
-                            </td>
-                        `;
-                        userList.appendChild(row);
-                    });
-                });
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith("user_")) {
+                    const username = key.replace("user_", "");
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${username}</td>
+                        <td>
+                            <button class="action-btn" onclick="editUser('${username}')">Edit</button>
+                            <button class="action-btn" onclick="deleteUser('${username}')">Delete</button>
+                        </td>
+                    `;
+                    userList.appendChild(row);
+                }
+            });
         }
 
         function loadVideoURL() {
-            fetch('/get-video-url')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.url) {
-                        document.getElementById("video-url").value = data.url;
-                    }
-                });
+            const videoUrl = localStorage.getItem("videoURL");
+            if (videoUrl) {
+                document.getElementById("video-url").value = videoUrl;
+            }
         }
 
         function editUser(username) {
             const newPassword = prompt(`Enter new password for ${username}:`);
             if (newPassword) {
-                // Faz uma requisição AJAX para atualizar a senha do usuário
-                fetch('/edit-user', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: username, password: newPassword })
-                }).then(response => response.json())
-                  .then(data => {
-                      alert("Password updated successfully!");
-                      loadUsers();
-                  });
+                localStorage.setItem(`user_${username}`, newPassword);
+                alert("Password updated successfully!");
             }
         }
 
         function deleteUser(username) {
             if (confirm(`Are you sure you want to delete the user ${username}?`)) {
-                // Faz uma requisição AJAX para excluir o usuário
-                fetch('/delete-user', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: username })
-                }).then(response => response.json())
-                  .then(data => {
-                      alert("User deleted successfully!");
-                      loadUsers();
-                  });
+                localStorage.removeItem(`user_${username}`);
+                alert("User deleted successfully!");
+                loadUsers();
             }
         }
     </script>
